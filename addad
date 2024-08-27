@@ -1,0 +1,61 @@
+from iqoptionapi.stable_api import IQ_Option
+import time
+import numpy as np
+
+# aqui tus credenciales jeje
+EMAIL = ""
+PASSWORD = ""
+
+# Inicializar la API de IQ Option
+api = IQ_Option(EMAIL, PASSWORD)
+api.connect()
+
+# Verificar la conexión
+if not api.check_connect():
+    print("Error al conectar con IQ Option")
+    exit()
+
+# Configuración del activo y el periodo
+ACTIVO = "EURUSD"  # Cambia esto al activo que desees
+PERIODO = 1  # Gráfico de 1 minuto
+RSI_PERIODO = 14  # Periodo de RSI
+
+# Función para calcular el RSI
+def calcular_rsi(cierres, periodo=14):
+    deltas = np.diff(cierres)
+    ganancias = np.where(deltas > 0, deltas, 0)
+    perdidas = np.where(deltas < 0, abs(deltas), 0)
+
+    promedio_ganancia = np.mean(ganancias[:periodo])
+    promedio_perdida = np.mean(perdidas[:periodo])
+
+    rs = promedio_ganancia / promedio_perdida
+    rsi = 100 - (100 / (1 + rs))
+    
+    return rsi
+
+# Función para manejar los datos en tiempo real y calcular el RSI
+def recibir_rsi(api, ACTIVO, RSI_PERIODO, PERIODO):
+    print(f"Suscribiéndose a datos de velas para {ACTIVO}...")
+    
+    # Suscribirse a las velas del activo
+    api.start_candles_stream(ACTIVO, PERIODO, 100)
+
+    while True:
+        try:
+            # Obtener datos de las velas
+            velas = api.get_realtime_candles(ACTIVO, PERIODO)
+            cierres = [candle['close'] for candle in velas.values()]
+            
+            if len(cierres) >= RSI_PERIODO:
+                rsi = calcular_rsi(cierres[-(RSI_PERIODO+1):], RSI_PERIODO)
+                print(f"RSI ({RSI_PERIODO}) en gráfico de {PERIODO} minuto(s): {rsi}")
+            
+            time.sleep(1)  # Esperar 1 segundo antes de obtener el siguiente valor
+        except KeyboardInterrupt:
+            print("Deteniendo el stream de velas...")
+            api.stop_candles_stream(ACTIVO, PERIODO)
+            break
+
+# Llamar a la función para recibir datos de RSI en tiempo real
+recibir_rsi(api, ACTIVO, RSI_PERIODO, PERIODO)
